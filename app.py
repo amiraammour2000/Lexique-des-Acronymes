@@ -157,7 +157,7 @@ def get_rich_data(sig_ids: list):
 
 # --- INTERFACE UTILISATEUR ---
 st.markdown("<h1 style='text-align: center;'>🌐 الموسوعة العالمية للاختصارات والمصطلحات</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; color: #27AE60;'>✅ مركز الغات</p>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #27AE60;'>✅ -مركز البحث العلمي و التقني لتطوير الغة العربية -تلمسان </p>", unsafe_allow_html=True)
 
 if AI_ENABLED:
     st.markdown("<p style='text-align: center; color: #27AE60;'>✅ بحث هجين نشط: دقيق (SQL) + دلالي بالذكاء الاصطناعي (ChromaDB)</p>", unsafe_allow_html=True)
