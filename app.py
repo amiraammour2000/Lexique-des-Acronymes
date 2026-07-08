@@ -51,12 +51,19 @@ def load_semantic_engine():
     except Exception:
         return None, None
 
-# Chargement de l'IA au démarrage avec un message d'attente
+# Chargement de l'IA au démarrage
 if AI_ENABLED:
-    with st.spinner('⏳ جاري تحميل محرك الذكاء الاصطناعي (العملية الأولى قد تستغرق 20 ثانية)...'):
-        model, collection = load_semantic_engine()
-        if not model:
+    with st.spinner('⏳ جاري تحميل محرك الذكاء الاصطناعي (20 ثانية أول مرة)...'):
+        try:
+            model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
+            chroma_client = chromadb.PersistentClient(path="./chroma_data")
+            collection = chroma_client.get_collection(name="lexique_semantique")
+            st.session_state['ai_model'] = model
+            st.session_state['ai_collection'] = collection
+            st.success("✅ محرك الذكاء الاصطناعي جاهز!")
+        except Exception as e:
             AI_ENABLED = False
+            st.error(f"❌ خطأ في تحميل الذكاء الاصطناعي: {str(e)}")
 
 # --- FONCTIONS DE RECHERCHE ---
 def search_fts(query: str, domain_id: int = None):
