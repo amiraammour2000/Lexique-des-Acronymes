@@ -44,7 +44,7 @@ def load_semantic_engine():
         return None, None
     try:
         from sentence_transformers import SentenceTransformer
-        model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2', backend="onnx")
+        model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
         chroma_client = chromadb.PersistentClient(path="./chroma_data")
         collection = chroma_client.get_collection(name="lexique_semantique")
         return model, collection
