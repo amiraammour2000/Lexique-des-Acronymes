@@ -1,12 +1,12 @@
 import streamlit as st
 import sqlite3
 
-# --- GESTION ROBUSTE DE L'IA (Ne crash pas si Windows bloque PyTorch) ---
+# --- GESTION ROBUSTE DE L'IA ---
 AI_ENABLED = True
 try:
     import chromadb
     from sentence_transformers import SentenceTransformer
-except (OSError, ImportError) as e:
+except Exception:
     AI_ENABLED = False
 
 # --- CONFIGURATION ---
@@ -41,36 +41,56 @@ def get_db():
 @st.cache_resource
 def load_semantic_engine():
     if not AI_ENABLED:
-        return None, None
+        return None, None, "Bibliothèques IA non installées"
+    
     try:
-        from sentence_transformers import SentenceTransformer
+        # 1. Charger le modèle
         model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
+        
+        # 2. Se connecter à ChromaDB
         chroma_client = chromadb.PersistentClient(path="./chroma_data")
-        collection = chroma_client.get_collection(name="lexique_semantique")
-        return model, collection
-    except Exception:
-        return None, None
+        
+        # 3. Vérifier si la collection existe déjà et est remplie
+        try:
+            collection = chroma_client.get_collection(name="lexique_semantique")
+            if collection.count() > 0:
+                return model, collection, None # Tout est prêt !
+        except Exception:
+            pass # La collection n'existe pas, on va la créer ci-dessous
+        
+        # 4. SI ON ARRIVE ICI : La base vectorielle est vide ou inexistante. On la génère !
+        with st.spinner("🧠 Première initialisation de l'IA sur le cloud (30 secondes)... Cela ne se produira qu'une seule fois !"):
+            collection = chroma_client.get_or_create_collection(name="lexique_semantique")
+            
+            conn = get_db()
+            cursor = conn.cursor()
+            cursor.execute("SELECT s.id, s.terme_developpe, s.definition_courte, t.sigle FROM Significations s JOIN Termes t ON s.terme_id = t.id")
+            rows = cursor.fetchall()
+            
+            if rows:
+                ids = [str(row[0]) for row in rows]
+                documents = [f"{row[1]}. {row[2]}" if row[2] else row[1] for row in rows]
+                embeddings = model.encode(documents).tolist()
+                collection.upsert(ids=ids, embeddings=embeddings, documents=documents)
+        
+        return model, collection, None
+
+    except Exception as e:
+        return None, None, str(e)
 
 # Chargement de l'IA au démarrage
 if AI_ENABLED:
-    with st.spinner('⏳ جاري تحميل محرك الذكاء الاصطناعي (20 ثانية أول مرة)...'):
-        try:
-            model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
-            chroma_client = chromadb.PersistentClient(path="./chroma_data")
-            collection = chroma_client.get_collection(name="lexique_semantique")
-            st.session_state['ai_model'] = model
-            st.session_state['ai_collection'] = collection
-            st.success("✅ محرك الذكاء الاصطناعي جاهز!")
-        except Exception as e:
+    with st.spinner('⏳ جاري تحميل محرك الذكاء الاصطناعي...'):
+        model, collection, ai_error = load_semantic_engine()
+        if not model:
             AI_ENABLED = False
-            st.error(f"❌ خطأ في تحميل الذكاء الاصطناعي: {str(e)}")
+            if ai_error:
+                st.error(f"❌ Erreur IA: {ai_error}")
 
 # --- FONCTIONS DE RECHERCHE ---
 def search_fts(query: str, domain_id: int = None):
     conn = get_db()
     cursor = conn.cursor()
-    
-    # 1. Tentative avec l'index FTS5 ultra-rapide
     try:
         fts_query = f"{query}*"
         base_query = """
@@ -88,9 +108,9 @@ def search_fts(query: str, domain_id: int = None):
         if results:
             return results
     except Exception:
-        pass # Si FTS5 bug, on passe au plan B
+        pass
 
-    # 2. PLAN B : Recherche SQL classique (LIKE) si l'index FTS est vide
+    # PLAN B : Recherche SQL classique (LIKE)
     base_query = """
         SELECT s.id AS sig_id, t.sigle, s.terme_developpe, s.definition_courte, s.definition_longue, 
                s.niveau, t.langue_origine, t.annee_creation
